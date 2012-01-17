@@ -1,0 +1,69 @@
+Metadata-Version: 1.0
+Name: repoze.who.plugins.ldap
+Version: 1.1a1
+Summary: LDAP plugin for repoze.who
+Home-page: http://code.gustavonarea.net/repoze.who.plugins.ldap/
+Author: Gustavo Narea
+Author-email: me@gustavonarea.net
+License: BSD-derived (http://www.repoze.org/LICENSE.txt)
+Download-URL: https://launchpad.net/repoze.who.plugins.ldap/+download
+Description: repoze.who.plugins.ldap -- LDAP Authentication for WSGI Applications
+        
+        repoze.who.plugins.ldap is an LDAP plugin for the identification and
+        authentication framework for WSGI applications, repoze.who, which acts as WSGI
+        middleware.
+        
+        It provides you with an straightforward solution to enable LDAP support in your 
+        applications. Yes, you read well: "straightforward", "LDAP" and
+        "applications" are in the same sentence. In fact, you may make your application
+        LDAP-aware in few minutes and with few lines of code.
+        
+        Another great news is that this package is *fully* documented and provides you
+        with a working and documented demo project.
+        
+        See the `docs` subdirectory of this package for more information, or browse
+        the online documentation <http://code.gustavonarea.net/repoze.who.plugins.ldap/>.
+        
+        
+        repoze.who.plugins.ldap Changelog
+        =================================
+        
+        1.1 Alpha 1 (2010-01-03)
+        ------------------------
+        
+        
+         - Changed the license to the `Repoze license <http://repoze.org/license.html>`_.
+         - Provided ``start_tls`` option both for the authenticator and the metadata
+           provider.
+         - Enable both pattern-replacement and subtree searches for the naming
+           attribute in ``_get_dn()``.
+         - Enable configuration of the naming attribute
+         - Enable the option to bind to the server with privileged credential before
+           doing searches
+         - Add a restrict pattern to pre-authentication DN searches
+         - Let the user choose whether to return the full DN or the supplied login as
+           the user identifier
+        
+        
+        1.0 (2008-09-11)
+        ----------------
+        
+        The initial release.
+        
+         - Provided the LDAP authenticator, which is compatible with identifiers that
+           define the 'login' item in the identity dict.
+         - Included the plugin to load metadata about the authenticated user from the
+           LDAP server.
+         - Documented how to install and use the plugins.
+         - Included Turbogears 2 demo project, using the plugin. There is also a section
+           in the documentation to explain how the demo works.
+        
+Keywords: ldap web application server wsgi repoze repoze.who
+Platform: UNKNOWN
+Classifier: Development Status :: 5 - Production/Stable
+Classifier: Intended Audience :: Developers
+Classifier: Natural Language :: English
+Classifier: Operating System :: OS Independent
+Classifier: Programming Language :: Python
+Classifier: Topic :: Internet :: WWW/HTTP :: WSGI :: Middleware
+Classifier: Topic :: System :: Systems Administration :: Authentication/Directory :: LDAP
