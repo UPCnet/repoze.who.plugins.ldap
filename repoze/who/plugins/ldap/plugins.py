@@ -29,6 +29,7 @@ from base64 import b64encode, b64decode
 import re
 
 import time
+import logging
 
 #{ Authenticators
 
@@ -40,17 +41,17 @@ class LDAPBaseAuthenticatorPlugin(object):
     def __init__(self, ldap_connection, base_dn, returned_id='dn',
                  start_tls=False, bind_dn='', bind_pass='', **kwargs):
         """Create an LDAP authentication plugin.
-        
+
         By passing an existing LDAPObject, you're free to use the LDAP
         authentication method you want, the way you want.
-   
+
         This is an *abstract* class, which means it's useless in itself. You
         can only use subclasses of this class that implement the L{_get_dn}
         method (e.g., the built-in authenticators).
-        
+
         This plugin is compatible with any identifier plugin that defines the
         C{login} and C{password} items in the I{identity} dictionary.
-        
+
         @param ldap_connection: An initialized LDAP connection.
         @type ldap_connection: C{ldap.ldapobject.SimpleLDAPObject}
 
@@ -72,7 +73,7 @@ class LDAPBaseAuthenticatorPlugin(object):
         @param bind_pass: The password for bind_dn directory entry
         @type bind_pass: C{str}
         @raise ValueError: If at least one of the parameters is not defined.
-        
+
         """
         if base_dn is None:
             raise ValueError('A base Distinguished Name must be specified')
@@ -103,33 +104,32 @@ class LDAPBaseAuthenticatorPlugin(object):
         Return the user DN based on the environment and the identity.
 
         Must be implemented in a subclass
-        
+
         @param environ: The WSGI environment.
         @param identity: The identity dictionary.
         @return: The Distinguished Name (DN)
         @rtype: C{unicode}
         @raise ValueError: If the C{login} key is not in the I{identity} dict.
-        
+
         """
         raise ValueError('Unimplemented')
-
 
     # IAuthenticatorPlugin
     def authenticate(self, environ, identity):
         """Return the naming identifier of the user to be authenticated.
-        
+
         @return: The naming identifier, if the credentials were valid.
         @rtype: C{unicode} or C{None}
-        
+
         """
-        
+        logger = logging.getLogger('repoze.who')
+
         try:
             dn = self._get_dn(environ, identity)
             password = identity['password']
         except (KeyError, TypeError, ValueError):
             return None
         except ldap.LDAPError, e:
-            logger = environ['repoze.who.logger']
             if isinstance(e, ldap.INVALID_CREDENTIALS):
                 log_func = logger.warn
                 ldap_down = False
@@ -137,13 +137,12 @@ class LDAPBaseAuthenticatorPlugin(object):
                 log_func = logger.error
                 ldap_down = isinstance(e, ldap.SERVER_DOWN)
 
-
             # when ldap is down lets log before attempting to re-establish connection
             log_func(str(e))
 
             if ldap_down:
                 isDown = True
-                attempt=1
+                attempt = 1
                 while isDown:
                     self.ldap_connection = None
                     try:
@@ -152,16 +151,16 @@ class LDAPBaseAuthenticatorPlugin(object):
                         password = identity['password']
                         isDown = False
                     except ldap.LDAPError, e:
-                        logger.info('Attempt #%s: Restarting ldap connection to %s'%(attempt, self.ldap_con_string)
+                        logger.info('Attempt #%s: Restarting ldap connection to %s' % (attempt, self.ldap_con_string)
 )
                         attempt = attempt + 1
                         time.sleep(2)
 
         if not hasattr(self.ldap_connection, 'simple_bind_s'):
-            environ['repoze.who.logger'].warn('Cannot bind with the provided '
+            logger.warn('Cannot bind with the provided '
                                               'LDAP connection object')
             return None
-        
+
         try:
             self.ldap_connection.simple_bind_s(dn, password)
             userdata = identity.get('userdata', '')
@@ -172,20 +171,19 @@ class LDAPBaseAuthenticatorPlugin(object):
                 identity['userdata'] = userdata + '<dn:%s>' % b64encode(dn)
                 return identity['login']
         except ldap.LDAPError, e:
-            logger = environ['repoze.who.logger']
             if isinstance(e, ldap.INVALID_CREDENTIALS):
                 log_func = logger.warn
                 ldap_down = False
             else:
                 log_func = logger.error
                 ldap_down = isinstance(e, ldap.SERVER_DOWN)
-                    
-            # when ldap is down lets log before attempting to re-establish connection         
+
+            # when ldap is down lets log before attempting to re-establish connection
             log_func(str(e))
-            
+
             if ldap_down:
                 isDown = True
-                attempt=1
+                attempt = 1
                 while isDown:
                     self.ldap_connection = None
                     try:
@@ -200,7 +198,7 @@ class LDAPBaseAuthenticatorPlugin(object):
                             identity['userdata'] = userdata + '<dn:%s>' % b64encode(dn)
                             return identity['login']
                     except ldap.LDAPError, e:
-                        logger.info('Attempt #%s: Restarting ldap connection to %s'%(attempt, self.ldap_con_string))
+                        logger.info('Attempt #%s: Restarting ldap connection to %s' % (attempt, self.ldap_con_string))
                         attempt = attempt + 1
                         time.sleep(2)
             return None
@@ -214,13 +212,13 @@ class LDAPAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
     def __init__(self, ldap_connection, base_dn, naming_attribute='uid',
                  **kwargs):
         """Create an LDAP authentication plugin using pattern-determined DNs
-        
+
         By passing an existing LDAPObject, you're free to use the LDAP
         authentication method you want, the way you want.
-    
+
         This plugin is compatible with any identifier plugin that defines the
         C{login} and C{password} items in the I{identity} dictionary.
-        
+
         @param ldap_connection: An initialized LDAP connection.
         @type ldap_connection: C{ldap.ldapobject.SimpleLDAPObject}
         @param base_dn: The base for the I{Distinguished Name}. Something like
@@ -233,7 +231,7 @@ class LDAPAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
 
         @raise ValueError: If at least one of the parameters is not defined.
 
-        The following parameters are inherited from 
+        The following parameters are inherited from
         L{LDAPBaseAuthenticatorPlugin.__init__}
         @param base_dn: The base for the I{Distinguished Name}. Something like
             C{ou=employees,dc=example,dc=org}, to which will be prepended the
@@ -244,7 +242,7 @@ class LDAPAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
             the directory server?
         @param bind_dn: Operate as the bind_dn directory entry
         @param bind_pass: The password for bind_dn directory entry
-        
+
 
         """
         LDAPBaseAuthenticatorPlugin.__init__(self, ldap_connection, base_dn,
@@ -255,17 +253,17 @@ class LDAPAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
         """
         Return the user naming identifier based on the environment and the
         identity.
-        
+
         If the C{login} item of the identity is C{rms} and the base DN is
         C{ou=developers,dc=gnu,dc=org}, the resulting DN will be:
         C{uid=rms,ou=developers,dc=gnu,dc=org}
-        
+
         @param environ: The WSGI environment.
         @param identity: The identity dictionary.
         @return: The Distinguished Name (DN)
         @rtype: C{unicode}
         @raise ValueError: If the C{login} key is not in the I{identity} dict.
-        
+
         """
 
         if self.bind_dn:
@@ -274,7 +272,7 @@ class LDAPAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
             except ldap.LDAPError:
                 raise ValueError("Couldn't bind with supplied credentials")
         try:
-            return self.naming_pattern % ( identity['login'], self.base_dn)
+            return self.naming_pattern % (identity['login'], self.base_dn)
         except (KeyError, TypeError):
             raise ValueError
 
@@ -284,13 +282,13 @@ class LDAPSearchAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
     def __init__(self, ldap_connection, base_dn, naming_attribute='uid',
                  search_scope='subtree', restrict='', **kwargs):
         """Create an LDAP authentication plugin determining the DN via LDAP searches.
-        
+
         By passing an existing LDAPObject, you're free to use the LDAP
         authentication method you want, the way you want.
-    
+
         This plugin is compatible with any identifier plugin that defines the
         C{login} and C{password} items in the I{identity} dictionary.
-        
+
         @param ldap_connection: An initialized LDAP connection.
         @type ldap_connection: C{ldap.ldapobject.SimpleLDAPObject}
         @param base_dn: The base for the I{Distinguished Name}. Something like
@@ -308,11 +306,11 @@ class LDAPSearchAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
         @type restrict: C{unicode}
         @attention: restrict will be interpolated into the search string as a
             bare string like in "(&%s(identifier=login))". It must be correctly
-            parenthesised for such usage as in restrict = "(objectClass=*)". 
+            parenthesised for such usage as in restrict = "(objectClass=*)".
 
         @raise ValueError: If at least one of the parameters is not defined.
 
-        The following parameters are inherited from 
+        The following parameters are inherited from
         L{LDAPBaseAuthenticatorPlugin.__init__}
         @param base_dn: The base for the I{Distinguished Name}. Something like
             C{ou=employees,dc=example,dc=org}, to which will be prepended the
@@ -323,7 +321,7 @@ class LDAPSearchAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
             with the directory server?
         @param bind_dn: Operate as the bind_dn directory entry
         @param bind_pass: The password for bind_dn directory entry
-        
+
         """
         LDAPBaseAuthenticatorPlugin.__init__(self, ldap_connection, base_dn,
                                              **kwargs)
@@ -336,28 +334,28 @@ class LDAPSearchAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
             raise ValueError("The search scope should be 'one[level]' or 'sub[tree]'")
 
         if restrict:
-            self.search_pattern = u'(&%s(%s=%%s))' % (restrict,naming_attribute)
+            self.search_pattern = u'(&%s(%s=%%s))' % (restrict, naming_attribute)
         else:
             self.search_pattern = u'(%s=%%s)' % naming_attribute
 
     def _get_dn(self, environ, identity):
         """
         Return the DN based on the environment and the identity.
-        
+
         Searches the directory entry with naming attribute matching the
         C{login} item of the identity.
 
         If the C{login} item of the identity is C{rms}, the naming attribute is
         C{uid} and the base DN is C{dc=gnu,dc=org}, we'll ask the server
-        to search for C{uid = rms} beneath the search base, hopefully 
+        to search for C{uid = rms} beneath the search base, hopefully
         finding C{uid=rms,ou=developers,dc=gnu,dc=org}.
-        
+
         @param environ: The WSGI environment.
         @param identity: The identity dictionary.
         @return: The Distinguished Name (DN)
         @rtype: C{unicode}
         @raise ValueError: If the C{login} key is not in the I{identity} dict.
-        
+
         """
 
         if self.bind_dn:
@@ -366,22 +364,22 @@ class LDAPSearchAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
             except ldap.LDAPError:
                 raise ValueError("Couldn't bind with supplied credentials")
         try:
-            login_name = identity['login'].replace('*',r'\*')
+            login_name = identity['login'].replace('*', r'\*')
             srch = self.search_pattern % login_name
             dn_list = self.ldap_connection.search_s(
                 self.base_dn,
                 self.search_scope,
                 srch,
                 )
-            
+
             if len(dn_list) == 1:
                 return dn_list[0][0]
             elif len(dn_list) > 1:
                 raise ValueError('Too many entries found for %s' % srch)
             else:
-                raise ValueError('No entry found for %s' %srch)
+                raise ValueError('No entry found for %s' % srch)
         except (KeyError, TypeError, ldap.LDAPError):
-            raise # ValueError
+            raise  # ValueError
 
 
 #{ Metadata providers
@@ -389,17 +387,17 @@ class LDAPSearchAuthenticatorPlugin(LDAPBaseAuthenticatorPlugin):
 
 class LDAPAttributesPlugin(object):
     """Loads LDAP attributes of the authenticated user."""
-    
+
     implements(IMetadataProvider)
 
     dnrx = re.compile('<dn:(?P<b64dn>[A-Za-z0-9+/]+=*)>')
-    
+
     def __init__(self, ldap_connection, attributes=None,
                  filterstr='(objectClass=*)', start_tls='',
                  bind_dn='', bind_pass=''):
         """
         Fetch LDAP attributes of the authenticated user.
-        
+
         @param ldap_connection: The LDAP connection to use to fetch this data.
         @type ldap_connection: C{ldap.ldapobject.SimpleLDAPObject} or C{str}
         @param attributes: The authenticated user's LDAP attributes you want to
@@ -421,7 +419,7 @@ class LDAPAttributesPlugin(object):
             connection from C{ldap_connection}, or if C{attributes} is not an
             iterable.
 
-        The following parameters are inherited from 
+        The following parameters are inherited from
         L{LDAPBaseAuthenticatorPlugin.__init__}
         @param base_dn: The base for the I{Distinguished Name}. Something like
             C{ou=employees,dc=example,dc=org}, to which will be prepended the
@@ -432,7 +430,7 @@ class LDAPAttributesPlugin(object):
             the directory server?
         @param bind_dn: Operate as the bind_dn directory entry
         @param bind_pass: The password for bind_dn directory entry
-        
+
         """
         if hasattr(attributes, 'split'):
             attributes = attributes.split(',')
@@ -448,24 +446,25 @@ class LDAPAttributesPlugin(object):
             except:
                 raise ValueError('Cannot upgrade the connection')
 
-        self.bind_dn   = bind_dn
+        self.bind_dn = bind_dn
         self.bind_pass = bind_pass
         self.attributes = attributes
         self.filterstr = filterstr
-    
+
     # IMetadataProvider
     def add_metadata(self, environ, identity):
         """
         Add metadata about the authenticated user to the identity.
-        
+
         It modifies the C{identity} dictionary to add the metadata.
-        
+
         @param environ: The WSGI environment.
         @param identity: The repoze.who's identity dictionary.
-        
+
         """
+        logger = logging.getLogger('repoze.who')
         # Search arguments:
-        dnmatch = self.dnrx.match(identity.get('userdata',''))
+        dnmatch = self.dnrx.match(identity.get('userdata', ''))
         if dnmatch:
             dn = b64decode(dnmatch.group('b64dn'))
         else:
@@ -484,7 +483,7 @@ class LDAPAttributesPlugin(object):
         try:
             attributes = self.ldap_connection.search_s(*args)
         except ldap.LDAPError, msg:
-            environ['repoze.who.logger'].warn('Cannot add metadata: %s' % msg)
+            logger.warn('Cannot add metadata: %s' % msg)
             raise Exception(identity)
         else:
             identity.update(attributes[0][1])
@@ -495,11 +494,11 @@ class LDAPAttributesPlugin(object):
 
 def make_ldap_connection(ldap_connection):
     """Return an LDAP connection object to the specified server.
-    
+
     If the C{ldap_connection} is already an LDAP connection object, it will
     be returned as is. If it's an LDAP URL, it will return an LDAP connection
     to the LDAP server specified in the URL.
-    
+
     @param ldap_connection: The LDAP connection object or the LDAP URL of the
         server to be connected to.
     @type ldap_connection: C{ldap.ldapobject.SimpleLDAPObject}, C{str} or
@@ -507,7 +506,7 @@ def make_ldap_connection(ldap_connection):
     @return: The LDAP connection object.
     @rtype: C{ldap.ldapobject.SimpleLDAPObject}
     @raise ValueError: If C{ldap_connection} is C{None}.
-    
+
     """
     if isinstance(ldap_connection, str) or isinstance(ldap_connection, unicode):
         return ldap.initialize(ldap_connection)
